@@ -1,0 +1,19 @@
+{
+  "name": "speedlens-pro-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@apollo/server": "^4.11.0",
+    "chrome-launcher": "^1.1.2",
+    "dotenv": "^17.4.2",
+    "graphql": "^16.9.0",
+    "groq-sdk": "^1.1.2",
+    "lighthouse": "^12.3.0",
+    "mongoose": "^9.6.1",
+    "uuid": "^10.0.0"
+  }
+}
