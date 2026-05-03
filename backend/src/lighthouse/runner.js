@@ -30,7 +30,18 @@ const DESKTOP_OPTIONS = {
  */
 export async function runLighthouse(url) {
   const chrome = await launch({
-    chromeFlags: ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
+    chromeFlags: [
+      '--headless',
+      '--no-sandbox',
+      '--disable-gpu',
+      '--disable-dev-shm-usage',
+      '--no-zygote',
+      '--disable-extensions',
+      '--disable-plugins',
+      '--disable-background-networking',
+      '--disable-default-apps',
+      '--mute-audio',
+    ],
   });
 
   try {
