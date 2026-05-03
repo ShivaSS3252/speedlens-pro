@@ -12,7 +12,12 @@ const server = new ApolloServer({ typeDefs, resolvers });
 const { url } = await startStandaloneServer(server, {
   listen: { port: 4000 },
   context: async () => ({}),
-  cors: { origin: 'http://localhost:3000', methods: ['GET', 'POST', 'OPTIONS'] },
+  cors: {
+    origin: process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+      : 'http://localhost:3000',
+    methods: ['GET', 'POST', 'OPTIONS'],
+  },
 });
 
 console.log(`SpeedLens Pro API ready at ${url}`);
