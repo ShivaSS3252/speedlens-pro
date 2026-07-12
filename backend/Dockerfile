@@ -1,6 +1,5 @@
 FROM node:20-slim
 
-# Install Chromium + required fonts/libs for headless Chrome
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -21,7 +20,6 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Tell chrome-launcher where Chromium lives
 ENV CHROME_PATH=/usr/bin/chromium
 
 WORKDIR /app
@@ -29,7 +27,11 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --omit=dev
 
+COPY tsconfig.json ./
+COPY nest-cli.json ./
 COPY src/ ./src/
+
+RUN npm run build
 
 EXPOSE 4000
 

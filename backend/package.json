@@ -1,19 +1,38 @@
 {
   "name": "speedlens-pro-backend",
   "version": "1.0.0",
-  "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "build": "nest build",
+    "start:prod": "node dist/main",
+    "start": "node dist/main",
+    "dev": "nest start --watch"
   },
   "dependencies": {
+    "@nestjs/apollo": "^12.2.0",
+    "@nestjs/common": "^10.4.0",
+    "@nestjs/config": "^3.2.0",
+    "@nestjs/core": "^10.4.0",
+    "@nestjs/graphql": "^12.2.0",
+    "@nestjs/mongoose": "^11.0.0",
+    "@nestjs/platform-fastify": "^10.4.0",
+    "@as-integrations/fastify": "^2.1.1",
+    "@fastify/cors": "^9.0.1",
     "@apollo/server": "^4.11.0",
-    "chrome-launcher": "^1.1.2",
-    "dotenv": "^17.4.2",
+    "apollo-server-core": "^3.13.0",
     "graphql": "^16.9.0",
+    "mongoose": "^9.6.1",
     "groq-sdk": "^1.1.2",
     "lighthouse": "^12.3.0",
-    "mongoose": "^9.6.1",
-    "uuid": "^10.0.0"
+    "chrome-launcher": "^1.1.2",
+    "uuid": "^10.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.0",
+    "@nestjs/schematics": "^10.1.4",
+    "@types/node": "^20.16.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
   }
 }

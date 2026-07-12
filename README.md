@@ -44,11 +44,13 @@ Paste any public URL → SpeedLens Pro launches headless Chrome, runs **two sequ
 - **@graphql-codegen** — auto-generated TypeScript types from schema
 
 ### Backend
-- **Node.js + Apollo Server 4** — GraphQL API on port 4000
+- **NestJS 10** — modular framework, dependency injection, decorators
+- **Fastify** — HTTP adapter via `@nestjs/platform-fastify`
+- **Apollo Server 4 + @nestjs/graphql** — GraphQL API on port 4000 (schema-first)
 - **Lighthouse 12 + chrome-launcher** — headless Chrome audit engine
 - **Groq SDK** — AI fix generation (`llama-3.1-8b-instant`)
-- **Mongoose + MongoDB Atlas** — persistent Report & History collections
-- **dotenv** — environment variable management
+- **Mongoose + MongoDB Atlas** — persistent Report & History collections (via `@nestjs/mongoose`)
+- **@nestjs/config** — environment variable management
 
 ---
 
@@ -60,22 +62,30 @@ speedlens_pro/
 │
 ├── backend/
 │   ├── package.json
+│   ├── tsconfig.json
+│   ├── nest-cli.json
+│   ├── Dockerfile
 │   ├── .env                        ← GROQ_API_KEY, MONGODB_URI (not committed)
 │   └── src/
-│       ├── index.js                ← Apollo Server entry point (port 4000)
-│       ├── db.js                   ← Mongoose connection
-│       ├── graphql/
-│       │   ├── schema.js           ← GraphQL type definitions
-│       │   └── resolvers.js        ← analyzeWebsite, generateFix, getReport, getHistory
+│       ├── main.ts                 ← NestJS bootstrap, Fastify adapter, port 4000
+│       ├── app.module.ts           ← Root module (GraphQL, Mongoose, Config)
+│       ├── schema.graphql          ← GraphQL type definitions (schema-first)
+│       ├── report/
+│       │   ├── report.module.ts
+│       │   ├── report.resolver.ts  ← analyzeWebsite, generateFix, getReport, getHistory
+│       │   ├── report.service.ts   ← Business logic, Promise.all orchestration
+│       │   └── report.schema.ts    ← Mongoose Report schema
+│       ├── history/
+│       │   ├── history.module.ts
+│       │   ├── history.service.ts  ← findByUrl, create
+│       │   └── history.schema.ts   ← Mongoose History schema
 │       ├── lighthouse/
-│       │   ├── runner.js           ← Dual Chrome + Lighthouse audit
-│       │   └── transformer.js      ← lhr → Report (scores, issues, suggestions)
-│       ├── ai/
-│       │   ├── stack-detector.js   ← Tech stack from HTTP headers + HTML
-│       │   └── fix-generator.js    ← Groq AI fix generation (cached, retried)
-│       └── models/
-│           ├── Report.js           ← Mongoose Report schema
-│           └── History.js          ← Mongoose History schema
+│       │   ├── lighthouse.module.ts
+│       │   └── lighthouse.service.ts ← Dual Chrome+Lighthouse audit + lhr transformer
+│       └── ai/
+│           ├── ai.module.ts
+│           ├── stack-detector.service.ts ← Tech stack from headers/HTML
+│           └── fix-generator.service.ts  ← Groq AI fix generation (cached, retried)
 │
 └── frontend/
     ├── package.json
@@ -162,8 +172,8 @@ MONGODB_URI=mongodb+srv://<user>:<pass>@cluster0.xxxxx.mongodb.net/speedlens
 Start the server:
 
 ```bash
-node src/index.js
-# → SpeedLens Pro API ready at http://localhost:4000/
+npm run dev
+# → SpeedLens Pro API ready at http://localhost:4000/graphql
 ```
 
 ### 3. Frontend setup

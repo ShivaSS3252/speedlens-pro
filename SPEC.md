@@ -232,59 +232,72 @@ query GetHistory($url: String!) {
 
 ## 7. Backend Architecture
 
-### Entry Point (`src/index.js`)
-- Loads `.env` (GROQ_API_KEY, MONGODB_URI)
-- Connects to MongoDB via `db.js`
-- Starts Apollo Server 4 on port 4000
-- CORS: allows `http://localhost:3000`
+### Framework
+- **NestJS 10** with **Fastify** HTTP adapter (`@nestjs/platform-fastify`)
+- **Schema-first GraphQL** via `@nestjs/graphql` + `@nestjs/apollo` (Apollo Server 4 under the hood)
+- **@nestjs/mongoose** for MongoDB/Mongoose integration
+- **@nestjs/config** for `.env` loading (GROQ_API_KEY, MONGODB_URI)
+- CORS configured via `@fastify/cors`; origins from `CORS_ORIGIN` env var (comma-separated)
+- Server listens on port 4000; GraphQL endpoint at `/graphql`
+
+### Module Structure
+
+| Module | Providers | Responsibility |
+|---|---|---|
+| `AppModule` | — | Root: wires GraphQL, Mongoose, Config, all feature modules |
+| `ReportModule` | `ReportResolver`, `ReportService` | GraphQL entry point + orchestration |
+| `HistoryModule` | `HistoryService` | MongoDB History CRUD |
+| `LighthouseModule` | `LighthouseService` | Chrome audit + lhr transform |
+| `AiModule` | `StackDetectorService`, `FixGeneratorService` | Stack detection + Groq fix generation |
 
 ### Lighthouse Pipeline
 
-**`src/lighthouse/runner.js`**
-1. `chrome-launcher` spawns headless Chromium on a random port (flags: `--headless`, `--no-sandbox`, `--disable-gpu`)
-2. Lighthouse connects via DevTools protocol — runs mobile audit (default emulation)
+**`src/lighthouse/lighthouse.service.ts`** — `run(url)` method
+1. `chrome-launcher` spawns headless Chromium (flags: `--headless`, `--no-sandbox`, `--disable-gpu`, `--disable-dev-shm-usage`, `--no-zygote`, `--disable-extensions`, `--disable-plugins`, `--disable-background-networking`, `--disable-default-apps`, `--mute-audio`)
+2. Lighthouse runs mobile audit (default emulation)
 3. Second run with desktop settings: `formFactor: 'desktop'`, 1350×940 viewport, RTT 40ms, 10240 kbps throughput, CPU slowdown ×1
 4. Chrome killed in `finally` block; returns `{ mobile: lhr, desktop: lhr }`
 
-**`src/lighthouse/transformer.js`**
+**`transform(url, { mobile, desktop })`** method on same service
 - Extracts `mobileScore` / `desktopScore` (`categories.performance.score * 100`)
 - Merges failing audits from both runs, deduplicated by audit id
 - Classifies as Issue if audit has `displayValue` or `details`; otherwise Suggestion
-- Strips markdown from descriptions
-- Generates UUID for report id
+- Strips markdown from descriptions; generates UUID for report id
 
 ### AI Layer
 
-**`src/ai/stack-detector.js`**
+**`src/ai/stack-detector.service.ts`** — `detect(url)` method
 - Fetches URL with 6 s timeout
 - Inspects `x-powered-by`, `x-generator`, `server` headers + HTML content
 - Returns one of: Next.js, Nuxt.js, WordPress, Gatsby, React, Angular, Svelte, Django, Node.js/Express, PHP, HTML/CSS/JS
-- Falls back to HTML/CSS/JS on any error
+- Falls back to `HTML/CSS/JS` on any error
 
-**`src/ai/fix-generator.js`**
+**`src/ai/fix-generator.service.ts`** — `generate(issue, techStack)` method
 - Groq client: `llama-3.1-8b-instant`, max 400 tokens, temperature 0.3
 - System prompt enforces JSON-only output: `{ language, code, explanation }`
-- In-memory cache keyed by `"title::techStack"` to skip duplicate calls
+- In-memory `Map` cache keyed by `"title::techStack"` — same issue never sent to Groq twice
 - Two retry paths (up to 3 total attempts):
   - JSON parse failure: sleeps 800 ms before each retry
   - API call throws: sleeps 1000 ms before attempt 2, 2000 ms before attempt 3
 - Returns `null` if all retries exhausted
 
-### Resolver Logic (`src/graphql/resolvers.js`)
+### Resolver / Service Logic
 
-**`analyzeWebsite`**
-1. `Promise.all([runLighthouse(url), detectStack(url)])` — both run in parallel
-2. Transform lhr → `Report` object (scores, issues, suggestions, UUID)
-3. Attach techStack + createdAt (ISO timestamp set in resolver)
+**`ReportResolver`** (`src/report/report.resolver.ts`) — maps GraphQL operations to `ReportService`
+
+**`ReportService.analyzeWebsite(url)`**
+1. `Promise.all([lighthouseService.run(url), stackDetectorService.detect(url)])` — parallel
+2. `lighthouseService.transform(url, lhrs)` → Report object (scores, issues, suggestions, UUID)
+3. Attach techStack + createdAt (ISO timestamp)
 4. Save `Report` doc to MongoDB
 5. Save `History` doc to MongoDB
-6. Return `Report` (no AI fixes generated here — fixes are on-demand via `generateFix`)
+6. Return Report (AI fixes are on-demand via `generateFix`, not pre-generated here)
 
-**`generateFix`** — calls fix-generator; hits cache first, else Groq API
+**`generateFix`** — delegates to `FixGeneratorService.generate()`; cache-first
 
-**`getReport`** — MongoDB lookup by report id
+**`getReport`** — `Report.findOne({ id })` via `ReportService.findById()`
 
-**`getHistory`** — last 10 History docs for url, sorted by createdAt desc
+**`getHistory`** — `History.find({ url }).sort({ createdAt: -1 }).limit(10)` via `HistoryService.findByUrl()`
 
 ---
 
@@ -363,22 +376,30 @@ speedlens_pro/
 │
 ├── backend/
 │   ├── package.json
-│   ├── .env                          ← GROQ_API_KEY, MONGODB_URI
+│   ├── tsconfig.json
+│   ├── nest-cli.json
+│   ├── Dockerfile
+│   ├── .env                              ← GROQ_API_KEY, MONGODB_URI
 │   └── src/
-│       ├── index.js                  ← Apollo Server entry point (port 4000)
-│       ├── db.js                     ← Mongoose connection
-│       ├── graphql/
-│       │   ├── schema.js             ← GraphQL type definitions
-│       │   └── resolvers.js          ← analyzeWebsite, generateFix, getReport, getHistory
+│       ├── main.ts                       ← NestJS bootstrap, Fastify adapter, port 4000
+│       ├── app.module.ts                 ← Root module (GraphQL, Mongoose, Config)
+│       ├── schema.graphql                ← GraphQL type definitions (schema-first)
+│       ├── report/
+│       │   ├── report.module.ts
+│       │   ├── report.resolver.ts        ← analyzeWebsite, generateFix, getReport, getHistory
+│       │   ├── report.service.ts         ← Business logic, Promise.all orchestration
+│       │   └── report.schema.ts          ← Mongoose Report schema
+│       ├── history/
+│       │   ├── history.module.ts
+│       │   ├── history.service.ts        ← findByUrl, create
+│       │   └── history.schema.ts         ← Mongoose History schema
 │       ├── lighthouse/
-│       │   ├── runner.js             ← Dual Chrome+Lighthouse audit (mobile + desktop)
-│       │   └── transformer.js        ← lhr → Report (scores, issues, suggestions, UUID)
-│       ├── ai/
-│       │   ├── stack-detector.js     ← Detect tech stack from headers/HTML
-│       │   └── fix-generator.js      ← Groq AI code fix generation (cached, retried)
-│       └── models/
-│           ├── Report.js             ← Mongoose schema for audit reports
-│           └── History.js            ← Mongoose schema for score history
+│       │   ├── lighthouse.module.ts
+│       │   └── lighthouse.service.ts     ← Dual Chrome+Lighthouse audit + lhr transformer
+│       └── ai/
+│           ├── ai.module.ts
+│           ├── stack-detector.service.ts ← Tech stack from HTTP headers + HTML
+│           └── fix-generator.service.ts  ← Groq AI fix generation (cached, retried)
 │
 └── frontend/
     ├── package.json
