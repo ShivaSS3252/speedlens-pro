@@ -25,13 +25,15 @@ ENV CHROME_PATH=/usr/bin/chromium
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install
 
 COPY tsconfig.json ./
 COPY nest-cli.json ./
 COPY src/ ./src/
 
 RUN npm run build
+
+RUN npm prune --omit=dev
 
 EXPOSE 4000
 
